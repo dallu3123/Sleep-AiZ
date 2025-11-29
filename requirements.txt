@@ -1,14 +1,9 @@
 # HTTP 요청
 requests==2.31.0
 
-# 카메라 제어 (Pi Camera)
-picamera2==0.3.16
-
-# DHT22 센서
-Adafruit-DHT==1.4.0
-# 또는 최신 버전
-# adafruit-circuitpython-dht==3.7.9
-# adafruit-blinka==8.20.0
+# DHT22 센서 (신버전 - 라즈베리파이 4 호환)
+adafruit-circuitpython-dht==4.0.4
+adafruit-blinka==8.47.0
 
 # 이미지 처리
 Pillow==10.1.0
