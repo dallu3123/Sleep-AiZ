@@ -6,7 +6,7 @@ import logging
 import requests
 import schedule
 from datetime import datetime
-from client.camera_capture import NoIRCamera
+from .camera_capture import NoIRCamera
 
 # 로깅 설정
 logging.basicConfig(
