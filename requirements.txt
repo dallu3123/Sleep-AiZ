@@ -1,0 +1,21 @@
+# HTTP 요청
+requests==2.31.0
+
+# 카메라 제어 (Pi Camera)
+picamera2==0.3.16
+
+# DHT22 센서
+Adafruit-DHT==1.4.0
+# 또는 최신 버전
+# adafruit-circuitpython-dht==3.7.9
+# adafruit-blinka==8.20.0
+
+# 이미지 처리
+Pillow==10.1.0
+
+# GPIO 제어
+RPi.GPIO==0.7.1
+
+# 유틸리티
+python-dotenv==1.0.0
+schedule==1.2.0

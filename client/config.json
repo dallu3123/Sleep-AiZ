@@ -1,0 +1,28 @@
+{
+    "server": {
+      "host": "192.168.0.180",
+      "port": 8000,
+      "base_url": "http://192.168.0.180:8000"
+    },
+    "camera": {
+      "resolution": [640, 480],
+      "capture_interval_minutes": 30,
+      "image_format": "jpg",
+      "image_quality": 85
+    },
+    "sensor": {
+      "dht22_pin": 4,
+      "read_interval_minutes": 30,
+      "retry_count": 3,
+      "retry_delay_seconds": 2
+    },
+    "system": {
+      "log_level": "INFO",
+      "max_retries": 3,
+      "timeout_seconds": 30
+    },
+    "paths": {
+      "temp_image_dir": "/tmp/sleep_aiz_images",
+      "log_file": "/var/log/sleep_aiz.log"
+    }
+}
