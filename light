@@ -1,0 +1,122 @@
+#3.3. 시간에 따른 조명 변화 기능 구현 방안
+#조명 하드웨어 구성
+#3W COB LED 모듈(COB-1007)을 사용하여 밝기 컨트롤 가능하도록 구성
+#시간 기반 스케줄러 설정
+#사용자가 설정한 취침/기상 시간 기준으로 조명 스케줄 생성
+#조명 변화가 갑작스럽지 않도록 선형 보간 방식 적용
+
+import RPi.GPIO as GPIO
+import time
+import datetime
+
+# ==========================================
+# 1. 사용자 설정 (User Configuration)
+# ==========================================
+LED_PIN = 18            # PWM을 사용할 GPIO 핀 번호 (BCM 기준)
+PWM_FREQ = 1000         # PWM 주파수 (Hz) - 깜빡임 방지
+
+# 시간 설정 (24시간 형식 HH:MM)
+WAKE_UP_TIME = "07:00"  # 기상 시간 (조명 켜지기 시작)
+SLEEP_TIME = "23:00"    # 취침 시간 (조명 꺼지기 시작)
+
+# 변화 지속 시간 (분 단위)
+FADE_DURATION_MIN = 30  # 30분 동안 서서히 켜지거나 꺼짐
+
+# ==========================================
+# 2. 초기화 및 함수 정의
+# ==========================================
+
+def setup_gpio():
+    """GPIO 및 PWM 초기화"""
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(LED_PIN, GPIO.OUT)
+    pwm = GPIO.PWM(LED_PIN, PWM_FREQ)
+    pwm.start(0)  # 초기 밝기 0
+    return pwm
+
+def get_minutes_from_midnight(dt_time):
+    """시간 객체를 자정 기준 분(minute)으로 변환"""
+    return dt_time.hour * 60 + dt_time.minute
+
+def linear_interpolation(start_val, end_val, progress):
+    """
+    선형 보간 (Linear Interpolation) 계산
+    :param start_val: 시작 밝기 (0~100)
+    :param end_val: 목표 밝기 (0~100)
+    :param progress: 진행률 (0.0 ~ 1.0)
+    :return: 현재 시점의 밝기 값
+    """
+    return start_val + (end_val - start_val) * progress
+
+def calculate_brightness(current_dt, wake_dt, sleep_dt, duration_min):
+    """현재 시간에 따른 목표 밝기(Duty Cycle) 계산"""
+    
+    curr_min = get_minutes_from_midnight(current_dt)
+    wake_min = get_minutes_from_midnight(wake_dt)
+    sleep_min = get_minutes_from_midnight(sleep_dt)
+    
+    duration = duration_min  # 분 단위
+
+    # 1. 기상 모드 (서서히 켜짐: 0 -> 100)
+    # 기상 시간 ~ 기상 시간 + 지속시간 사이
+    if wake_min <= curr_min < (wake_min + duration):
+        elapsed = curr_min - wake_min
+        progress = elapsed / duration
+        return linear_interpolation(0, 100, progress)
+
+    # 2. 낮 시간 (완전히 켜짐: 100)
+    # 기상 변화 끝난 후 ~ 취침 시간 전
+    elif (wake_min + duration) <= curr_min < sleep_min:
+        return 100.0
+
+    # 3. 취침 모드 (서서히 꺼짐: 100 -> 0)
+    # 취침 시간 ~ 취침 시간 + 지속시간 사이
+    elif sleep_min <= curr_min < (sleep_min + duration):
+        elapsed = curr_min - sleep_min
+        progress = elapsed / duration
+        return linear_interpolation(100, 0, progress)
+
+    # 4. 그 외 밤 시간 (완전히 꺼짐: 0)
+    else:
+        return 0.0
+
+# ==========================================
+# 3. 메인 실행 루프
+# ==========================================
+def main():
+    pwm = setup_gpio()
+    
+    print(f"System Started. Wake: {WAKE_UP_TIME}, Sleep: {SLEEP_TIME}")
+    print(f"Fade Duration: {FADE_DURATION_MIN} minutes")
+
+    try:
+        while True:
+            # 현재 시간 구하기
+            now = datetime.datetime.now()
+            
+            # 비교를 위해 오늘의 날짜가 적용된 datetime 객체 생성
+            str_format = "%H:%M"
+            today_wake = datetime.datetime.strptime(WAKE_UP_TIME, str_format).replace(
+                year=now.year, month=now.month, day=now.day)
+            today_sleep = datetime.datetime.strptime(SLEEP_TIME, str_format).replace(
+                year=now.year, month=now.month, day=now.day)
+
+            # 밝기 계산
+            target_duty = calculate_brightness(now, today_wake, today_sleep, FADE_DURATION_MIN)
+            
+            # PWM 적용 (밝기 변경)
+            pwm.ChangeDutyCycle(target_duty)
+            
+            # 디버깅용 출력 (필요 시 주석 해제)
+            # print(f"Time: {now.strftime('%H:%M:%S')}, Brightness: {target_duty:.1f}%")
+
+            time.sleep(1)  # 1초마다 업데이트
+
+    except KeyboardInterrupt:
+        print("\nProgram stopped by user.")
+    finally:
+        pwm.stop()
+        GPIO.cleanup()
+
+if __name__ == "__main__":
+    main();
