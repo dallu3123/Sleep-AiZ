@@ -66,14 +66,21 @@ class MicrophoneReader:
         # RMS (Root Mean Square) 계산
         rms = np.sqrt(np.mean(samples ** 2))
         
-        # 0으로 나누기 방지
-        if rms < 1:
-            rms = 1
+        # 최소값 설정 (0으로 나누기 방지)
+        if rms < 100:
+            rms = 100
         
-        # 데시벨 변환 (기준값: 최대 ADC 값 65472)
-        db = 20 * np.log10(rms / 65472.0) + 94  # 94dB = 보정값
+        # 최대 ADC 값
+        max_value = 65472.0
         
-        return max(0, db)  # 음수 방지
+        # 상대 데시벨 계산 (0-100 범위로 정규화)
+        ratio = rms / max_value
+        db = 20 * np.log10(ratio) + 100  # 기준값 조정
+        
+        # 실용적 범위로 제한 (30-90dB)
+        db = max(30, min(90, db))
+        
+        return db
     
     def measure_noise_level(self, duration: float = 2.0):
         """
