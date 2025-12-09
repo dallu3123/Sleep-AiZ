@@ -6,7 +6,7 @@ import logging
 import requests
 import schedule
 from datetime import datetime
-from camera_capture import NoIRCamera
+from camera_capture import RaspberryPiCamera
 from sensor_reader import DHT22Sensor
 
 # 로깅 설정
@@ -39,7 +39,7 @@ class SleepAiZClient:
         self.max_retries = self.config['system']['max_retries']
         
         # 카메라 초기화
-        self.camera = NoIRCamera(
+        self.camera = RaspberryPiCamera(
             resolution=tuple(self.config['camera']['resolution']),
             image_format=self.config['camera']['image_format'],
             image_quality=self.config['camera']['image_quality']
@@ -328,14 +328,14 @@ class SleepAiZClient:
             while True:
                 schedule.run_pending()
                 time.sleep(1)
-                
+    
         except KeyboardInterrupt:
             logger.info("\n사용자에 의해 종료됨")
         except Exception as e:
             logger.error(f"치명적 오류: {e}")
         finally:
             self.cleanup()
-    
+
     def cleanup(self):
         """리소스 정리"""
         logger.info("리소스 정리 중...")
