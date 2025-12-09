@@ -96,6 +96,9 @@ class MicrophoneReader:
             # 샘플 수집
             samples = self.read_samples(duration=duration, sample_rate=100)
             
+            # 디버깅: 원시 값 출력
+            logger.info(f"샘플 통계 - 최소: {np.min(samples)}, 최대: {np.max(samples)}, 평균: {np.mean(samples):.1f}")
+            
             # 구간별 데시벨 계산 (0.5초씩)
             chunk_size = 50  # 100 samples/sec * 0.5 sec
             decibels = []
