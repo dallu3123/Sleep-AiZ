@@ -11,6 +11,8 @@ from camera_capture import RaspberryPiCamera
 from sensor_reader import DHT22Sensor
 from buzzer_control import Buzzer
 from alarm_checker import AlarmChecker
+from ultrasonic_sensor import UltrasonicSensor
+from led_control import LED
 
 # 로깅 설정
 logging.basicConfig(
@@ -58,6 +60,12 @@ class SleepAiZClient:
         # 부저 초기화 (GPIO 18번 기본)
         self.buzzer = Buzzer(pin=18)
         
+        # LED 초기화 (GPIO 17번)
+        self.led = LED(pin=17)
+        
+        # 초음파 센서 초기화 (GPIO 23, 24)
+        self.ultrasonic = UltrasonicSensor(trig_pin=23, echo_pin=24)
+        
         # 알람 체커 초기화
         self.alarm_checker = AlarmChecker(self.server_url, self.timeout)
         
@@ -65,6 +73,9 @@ class SleepAiZClient:
         self.alarm_running = False
         self.alarm_thread = None
         self.current_alarm_id = None
+        
+        # 초음파 센서 스레드
+        self.ultrasonic_thread = None
         
         # 임시 이미지 디렉토리
         self.temp_image_dir = self.config['paths']['temp_image_dir']
@@ -325,12 +336,24 @@ class SleepAiZClient:
                 
                 self.alarm_running = True
                 self.current_alarm_id = alarm['id']
+                
+                # LED 켜기
+                self.led.on()
+                
+                # 부저 울리기 스레드
                 self.alarm_thread = threading.Thread(
                     target=self._ring_alarm,
                     args=(alarm['id'],),
                     daemon=True
                 )
                 self.alarm_thread.start()
+                
+                # 초음파 센서 모니터링 스레드
+                self.ultrasonic_thread = threading.Thread(
+                    target=self._monitor_hand_gesture,
+                    daemon=True
+                )
+                self.ultrasonic_thread.start()
             
             # 알람이 울리는 중이면 자주 확인
             if self.alarm_running:
@@ -338,11 +361,44 @@ class SleepAiZClient:
                 if not ringing_alarms:
                     # 알람이 꺼짐
                     logger.info("알람이 웹에서 꺼졌습니다")
-                    self.alarm_running = False
-                    self.buzzer.off()
+                    self._stop_alarm()
         
         except Exception as e:
             logger.error(f"알람 확인 중 오류: {e}")
+    
+    def _monitor_hand_gesture(self):
+        """초음파 센서로 손 동작 감지 (5cm 이내 5초)"""
+        logger.info("손 동작 모니터링 시작 (5cm 이내 5초)")
+        
+        while self.alarm_running:
+            # 5cm 이내에 5초 동안 손 감지
+            if self.ultrasonic.detect_hand(threshold=5.0, duration=5.0, check_interval=0.2):
+                logger.info("🖐️ 손 동작 감지! 알람 끄기")
+                
+                # 서버에 알람 끄기 요청
+                try:
+                    if self.current_alarm_id:
+                        url = f"{self.server_url}/api/alarms/{self.current_alarm_id}/stop"
+                        response = requests.post(url, timeout=self.timeout)
+                        if response.status_code == 200:
+                            logger.info("서버에 알람 끄기 요청 성공")
+                        else:
+                            logger.warning(f"알람 끄기 요청 실패: {response.status_code}")
+                except Exception as e:
+                    logger.error(f"알람 끄기 요청 중 오류: {e}")
+                
+                # 로컬에서 알람 중지
+                self._stop_alarm()
+                break
+            
+            time.sleep(0.5)
+    
+    def _stop_alarm(self):
+        """알람 완전히 중지"""
+        self.alarm_running = False
+        self.buzzer.off()
+        self.led.off()
+        logger.info("알람 중지 완료")
     
     def _ring_alarm(self, alarm_id: int):
         """알람 울리기 (별도 스레드)"""
@@ -372,54 +428,54 @@ class SleepAiZClient:
                         break
                 except Exception as e:
                     logger.error(f"알람 상태 확인 오류: {e}")
-        
+
         self.buzzer.off()
         self.alarm_running = False
         logger.info(f"알람 {alarm_id} 부저 종료")
-    
+
     def start(self):
         """클라이언트 시작"""
         try:
             logger.info("\n" + "=" * 50)
             logger.info("Sleep-AiZ 클라이언트 시작")
             logger.info("=" * 50)
-            
+
             # 카메라 시작
             self.camera.start()
-            
+
             # 서버 연결 확인
             if not self.check_server_health():
                 logger.error("서버에 연결할 수 없습니다. 서버를 먼저 실행해주세요.")
                 return
-            
+
             # 즉시 한 번 실행
             logger.info("초기 작업 실행...")
             self.job()
-            
+
             # 스케줄 설정
             interval = self.config['camera']['capture_interval_minutes']
             schedule.every(interval).minutes.do(self.job)
-            
+
             # 알람 체크는 1분마다
             schedule.every(1).minutes.do(self.check_alarms)
-            
+
             logger.info(f"\n스케줄러 시작:")
             logger.info(f"  - 데이터 수집: {interval}분마다")
             logger.info(f"  - 알람 체크: 1분마다")
             logger.info("종료하려면 Ctrl+C를 누르세요.\n")
-            
+
             # 스케줄 실행
             while True:
                 schedule.run_pending()
                 time.sleep(1)
-                
+
         except KeyboardInterrupt:
             logger.info("\n사용자에 의해 종료됨")
         except Exception as e:
             logger.error(f"치명적 오류: {e}")
         finally:
             self.cleanup()
-    
+
     def cleanup(self):
         """리소스 정리"""
         logger.info("리소스 정리 중...")
@@ -427,6 +483,9 @@ class SleepAiZClient:
             self.alarm_running = False
             self.buzzer.off()
             self.buzzer.cleanup()
+            self.led.off()
+            self.led.cleanup()
+            self.ultrasonic.cleanup()
             self.camera.stop()
             self.camera.close()
             self.sensor.close()
