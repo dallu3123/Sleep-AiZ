@@ -135,7 +135,7 @@ def test_camera(resolution: Tuple[int, int] = (640, 480),
     test_dir = "/tmp/sleep_aiz_test"
     os.makedirs(test_dir, exist_ok=True)
     
-    camera = NoIRCamera(resolution=resolution)
+    camera = RaspberryPiCamera(resolution=resolution)
     
     try:
         camera.start()
