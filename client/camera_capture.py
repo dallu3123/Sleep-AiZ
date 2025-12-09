@@ -34,6 +34,14 @@ class RaspberryPiCamera:
         )
         self.camera.configure(config)
         
+        # 화이트 밸런스 설정 (자동 또는 고정)
+        # 옵션: "auto", "tungsten", "fluorescent", "indoor", "daylight", "cloudy"
+        self.camera.set_controls({
+            "AwbMode": 1,  # 1=auto, 2=tungsten, 3=fluorescent, 5=daylight
+            "Brightness": 0.0,  # -1.0 ~ 1.0
+            "Contrast": 1.0     # 0.0 ~ 2.0
+        })
+        
         logger.info(f"카메라 초기화 완료: {resolution[0]}x{resolution[1]}, {image_format.upper()}")
     
     def start(self):
