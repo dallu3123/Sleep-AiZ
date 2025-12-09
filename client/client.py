@@ -64,6 +64,7 @@ class SleepAiZClient:
         # 알람 스레드 플래그
         self.alarm_running = False
         self.alarm_thread = None
+        self.current_alarm_id = None
         
         # 임시 이미지 디렉토리
         self.temp_image_dir = self.config['paths']['temp_image_dir']
@@ -323,6 +324,7 @@ class SleepAiZClient:
                 logger.info(f"🔔 알람 울림: {alarm.get('label', 'Alarm')} at {alarm.get('alarm_time')}")
                 
                 self.alarm_running = True
+                self.current_alarm_id = alarm['id']
                 self.alarm_thread = threading.Thread(
                     target=self._ring_alarm,
                     args=(alarm['id'],),
@@ -330,7 +332,7 @@ class SleepAiZClient:
                 )
                 self.alarm_thread.start()
             
-            # 서버에서 알람이 꺼졌는지 확인
+            # 알람이 울리는 중이면 자주 확인
             if self.alarm_running:
                 ringing_alarms = self.alarm_checker.check_ringing_alarms()
                 if not ringing_alarms:
@@ -351,10 +353,25 @@ class SleepAiZClient:
         start_time = time.time()
         
         while self.alarm_running and (time.time() - start_time < max_duration):
-            self.buzzer.on()
-            time.sleep(0.5)
-            self.buzzer.off()
-            time.sleep(0.5)
+            # 매 5초마다 서버 확인 (빠른 응답)
+            for _ in range(5):
+                if not self.alarm_running:
+                    break
+                self.buzzer.on()
+                time.sleep(0.5)
+                self.buzzer.off()
+                time.sleep(0.5)
+            
+            # 서버에서 알람 상태 확인
+            if self.alarm_running:
+                try:
+                    ringing = self.alarm_checker.check_ringing_alarms()
+                    if not ringing:
+                        logger.info("서버에서 알람이 꺼짐 감지")
+                        self.alarm_running = False
+                        break
+                except Exception as e:
+                    logger.error(f"알람 상태 확인 오류: {e}")
         
         self.buzzer.off()
         self.alarm_running = False
